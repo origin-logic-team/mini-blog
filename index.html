@@ -191,135 +191,153 @@
         </footer>
     </div>
 
-    <script>
-        let allItems = [];
+<script>
+	
+let allItems = [];
+let defaultCategory = 'ALL';
 
-        function parseCatalog(rawText) {
-            const items = [];
-            const regex = /<item>([\s\S]*?)<\/item>/g;
-            let match;
-            while ((match = regex.exec(rawText)) !== null) {
-                const block = match[1];
-                const id = (block.match(/<id>([\s\S]*?)<\/id>/) || [])[1]?.trim() || '';
-                const title = (block.match(/<title>([\s\S]*?)<\/title>/) || [])[1]?.trim() || '';
-                const date = (block.match(/<date>([\s\S]*?)<\/date>/) || [])[1]?.trim() || '';
-                const category = (block.match(/<category>([\s\S]*?)<\/category>/) || [])[1]?.trim() || 'general';
-                if (id && title) {
-                    items.push({ id, title, date, category });
-                }
-            }
-            return items;
+function parseCatalog(rawText) {
+    // 解析頂層的 <init_cat> 設定
+    const initCatMatch = rawText.match(/<init_cat>([\s\S]*?)<\/init_cat>/);
+    if (initCatMatch && initCatMatch[1].trim()) {
+        defaultCategory = initCatMatch[1].trim();
+    }
+
+    const items = [];
+    const regex = /<item>([\s\S]*?)<\/item>/g;
+    let match;
+    while ((match = regex.exec(rawText)) !== null) {
+        const block = match[1];
+        const id = (block.match(/<id>([\s\S]*?)<\/id>/) || [])[1]?.trim() || '';
+        const title = (block.match(/<title>([\s\S]*?)<\/title>/) || [])[1]?.trim() || '';
+        const date = (block.match(/<date>([\s\S]*?)<\/date>/) || [])[1]?.trim() || '';
+        const category = (block.match(/<category>([\s\S]*?)<\/category>/) || [])[1]?.trim() || 'general';
+        if (id && title) {
+            items.push({ id, title, date, category });
         }
+    }
+    return items;
+}
 
-        function parseArticles(rawText, targetId) {
-            const regex = /<article\s+id="([^"]+)">([\s\S]*?)<\/article>/g;
-            let match;
-            while ((match = regex.exec(rawText)) !== null) {
-                if (match[1] === targetId) {
-                    return match[2].trim();
-                }
-            }
-            return null;
+function parseArticles(rawText, targetId) {
+    const regex = /<article\s+id="([^"]+)">([\s\S]*?)<\/article>/g;
+    let match;
+    while ((match = regex.exec(rawText)) !== null) {
+        if (match[1] === targetId) {
+            return match[2].trim();
         }
+    }
+    return null;
+}
 
-        function renderCategories(items) {
-            const categories = ['ALL', ...new Set(items.map(i => i.category))];
-            const catContainer = document.getElementById('category-container');
-            catContainer.innerHTML = categories.map(cat => 
-                `<button class="cat-btn ${cat === 'ALL' ? 'active' : ''}" onclick="filterCategory('${cat}', this)">${cat.toUpperCase()}</button>`
-            ).join('');
+function renderCategories(items, activeCat = 'ALL') {
+    const categories = ['ALL', ...new Set(items.map(i => i.category))];
+    const catContainer = document.getElementById('category-container');
+    catContainer.innerHTML = categories.map(cat => 
+        `<button class="cat-btn ${cat.toLowerCase() === activeCat.toLowerCase() ? 'active' : ''}" onclick="filterCategory('${cat}', this)">${cat.toUpperCase()}</button>`
+    ).join('');
+}
+
+window.filterCategory = function(cat, btn) {
+    document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const filtered = cat === 'ALL' ? allItems : allItems.filter(i => i.category.toLowerCase() === cat.toLowerCase());
+    renderList(filtered);
+};
+
+function renderList(items) {
+    const mainContent = document.getElementById('main-content');
+    document.getElementById('page-title').innerText = 'MINI BLOG';
+    document.getElementById('back-home').style.display = 'none';
+    document.getElementById('hub-link').style.display = 'inline';
+    document.getElementById('category-container').style.display = 'flex';
+
+    if (items.length === 0) {
+        mainContent.innerHTML = '<span class="error-text">目前沒有符合的文章。</span>';
+        return;
+    }
+
+    mainContent.className = '';
+    mainContent.innerHTML = items.map(item => `
+        <div class="post-item" onclick="loadArticle('${item.id}')">
+            <div class="post-title">${item.title}</div>
+            <div class="post-meta">
+                <span>📅 ${item.date}</span>
+                <span>#${item.category}</span>
+            </div>
+        </div>
+    `).join('');
+}
+
+window.loadArticle = async function(id) {
+    const mainContent = document.getElementById('main-content');
+    mainContent.className = 'loading-text';
+    mainContent.innerHTML = '正在載入文章內容...';
+
+    try {
+        const response = await fetch(`./posts_content.txt?v=${new Date().getTime()}`);
+        if (!response.ok) throw new Error('無法讀取 posts_content.txt');
+        const rawText = await response.text();
+        const articleHtml = parseArticles(rawText, id);
+
+        if (!articleHtml) throw new Error(`找不到 ID 為 ${id} 的文章內容`);
+
+        const currentItem = allItems.find(i => i.id === id);
+        document.getElementById('page-title').innerText = currentItem ? currentItem.title : 'ARTICLE';
+        document.getElementById('back-home').style.display = 'inline';
+        document.getElementById('hub-link').style.display = 'none';
+        document.getElementById('category-container').style.display = 'none';
+
+        let processed = articleHtml.replace(/\[img:\s*([^\]]+)\]/g, '<img src="$1" alt="image">');
+
+        mainContent.className = '';
+        mainContent.innerHTML = processed;
+        window.location.hash = `id=${id}`;
+    } catch (err) {
+        mainContent.className = '';
+        mainContent.innerHTML = `<span class="error-text">[錯誤] ${err.message}</span>`;
+    }
+};
+
+window.goHome = function(e) {
+    e.preventDefault();
+    window.location.hash = '';
+    // 返回首頁時回到預設分類
+    const initialItems = (defaultCategory === 'ALL') 
+        ? allItems 
+        : allItems.filter(i => i.category.toLowerCase() === defaultCategory.toLowerCase());
+    renderCategories(allItems, defaultCategory);
+    renderList(initialItems);
+};
+
+async function initBlog() {
+    try {
+        const res = await fetch('./catalog.txt');
+        if (!res.ok) throw new Error('無法讀取 catalog.txt');
+        const rawText = await res.text();
+        allItems = parseCatalog(rawText);
+
+        const hash = window.location.hash;
+        if (hash.startsWith('#id=')) {
+            renderCategories(allItems, defaultCategory);
+            loadArticle(hash.replace('#id=', ''));
+        } else {
+            // 依據 catalog.txt 設定的 defaultCategory 呈現初次清單
+            renderCategories(allItems, defaultCategory);
+            const initialItems = (defaultCategory === 'ALL') 
+                ? allItems 
+                : allItems.filter(i => i.category.toLowerCase() === defaultCategory.toLowerCase());
+            renderList(initialItems);
         }
+    } catch (err) {
+        const mainContent = document.getElementById('main-content');
+        mainContent.className = '';
+        mainContent.innerHTML = `<span class="error-text">[系統初始化錯誤] ${err.message}</span><br>請確認 catalog.txt 與 posts_content.txt 是否存在。`;
+    }
+}
 
-        window.filterCategory = function(cat, btn) {
-            document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            const filtered = cat === 'ALL' ? allItems : allItems.filter(i => i.category === cat);
-            renderList(filtered);
-        };
+window.onload = initBlog;
 
-        function renderList(items) {
-            const mainContent = document.getElementById('main-content');
-            document.getElementById('page-title').innerText = 'MINI BLOG';
-            document.getElementById('back-home').style.display = 'none';
-            document.getElementById('hub-link').style.display = 'inline';
-            document.getElementById('category-container').style.display = 'flex';
-
-            if (items.length === 0) {
-                mainContent.innerHTML = '<span class="error-text">目前沒有符合的文章。</span>';
-                return;
-            }
-
-            mainContent.className = '';
-            mainContent.innerHTML = items.map(item => `
-                <div class="post-item" onclick="loadArticle('${item.id}')">
-                    <div class="post-title">${item.title}</div>
-                    <div class="post-meta">
-                        <span>📅 ${item.date}</span>
-                        <span>#${item.category}</span>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        window.loadArticle = async function(id) {
-            const mainContent = document.getElementById('main-content');
-            mainContent.className = 'loading-text';
-            mainContent.innerHTML = '正在載入文章內容...';
-
-            try {
-                const response = await fetch('./posts_content.txt');
-                if (!response.ok) throw new Error('無法讀取 posts_content.txt');
-                const rawText = await response.text();
-                const articleHtml = parseArticles(rawText, id);
-
-                if (!articleHtml) throw new Error(`找不到 ID 為 ${id} 的文章內容`);
-
-                const currentItem = allItems.find(i => i.id === id);
-                document.getElementById('page-title').innerText = currentItem ? currentItem.title : 'ARTICLE';
-                document.getElementById('back-home').style.display = 'inline';
-                document.getElementById('hub-link').style.display = 'none';
-                document.getElementById('category-container').style.display = 'none';
-
-                let processed = articleHtml.replace(/\[img:\s*([^\]]+)\]/g, '<img src="$1" alt="image">');
-
-                mainContent.className = '';
-                mainContent.innerHTML = processed;
-                window.location.hash = `id=${id}`;
-            } catch (err) {
-                mainContent.className = '';
-                mainContent.innerHTML = `<span class="error-text">[錯誤] ${err.message}</span>`;
-            }
-        };
-
-        window.goHome = function(e) {
-            e.preventDefault();
-            window.location.hash = '';
-            renderList(allItems);
-        };
-
-        async function initBlog() {
-            try {
-                const res = await fetch('./catalog.txt');
-                if (!res.ok) throw new Error('無法讀取 catalog.txt');
-                const rawText = await res.text();
-                allItems = parseCatalog(rawText);
-
-                renderCategories(allItems);
-
-                const hash = window.location.hash;
-                if (hash.startsWith('#id=')) {
-                    loadArticle(hash.replace('#id=', ''));
-                } else {
-                    renderList(allItems);
-                }
-            } catch (err) {
-                const mainContent = document.getElementById('main-content');
-                mainContent.className = '';
-                mainContent.innerHTML = `<span class="error-text">[系統初始化錯誤] ${err.message}</span><br>請確認 catalog.txt 與 posts_content.txt 是否存在。`;
-            }
-        }
-
-        window.onload = initBlog;
-    </script>
+</script>
 </body>
 </html>

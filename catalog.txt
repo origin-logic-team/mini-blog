@@ -1,13 +1,8 @@
-<item>
-<id>001</id>
-<title>第一篇：我的散步隨筆</title>
-<date>2026-06-06</date>
-<category>life</category>
-</item>
+<init_cat>app</init_cat>
 
 <item>
-<id>002</id>
-<title>第二篇：純文字技術筆記</title>
-<date>2026-06-05</date>
-<category>tech</category>
+<id>001</id>
+<title>第一篇：自製線上日誌編輯器</title>
+<date>2026-06-06</date>
+<category>app</category>
 </item>
