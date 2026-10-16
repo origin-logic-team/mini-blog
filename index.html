@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini Blog | Origin Logic Team</title>
+    <style>
+        :root {
+            --e-paper-white: #f4f4f4;
+            --e-paper-black: #1a1a1a;
+            --slate-blue: #5f9ea0;
+            --border-color: #d1d1d1;
+        }
+
+        body {
+            background-color: var(--e-paper-white);
+            color: var(--e-paper-black);
+            font-family: "Courier New", Courier, monospace;
+            margin: 0;
+            padding: 30px 20px;
+            display: flex;
+            justify-content: center;
+            line-height: 1.5;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 750px;
+        }
+
+        header {
+            border-bottom: 2px solid var(--e-paper-black);
+            margin-bottom: 20px;
+            padding-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+        }
+
+        .back-link {
+            text-decoration: none;
+            color: var(--slate-blue);
+            font-size: 0.85rem;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        h1 {
+            margin: 5px 0 0 0;
+            font-size: 1.6rem;
+            letter-spacing: 2px;
+        }
+
+        /* 輕量化分類按鈕列 */
+        .category-bar {
+            margin-bottom: 15px;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .cat-btn {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            padding: 2px 10px;
+            font-family: inherit;
+            font-size: 0.8rem;
+            cursor: pointer;
+            box-shadow: 1px 1px 0px var(--border-color);
+        }
+
+        .cat-btn:hover, .cat-btn.active {
+            background: var(--e-paper-black);
+            color: var(--e-paper-white);
+        }
+
+        /* 緊湊型文章列表樣式（單個 viewport 容納更多） */
+        .post-item {
+            background-color: #ffffff;
+            padding: 10px 15px;
+            border: 1px solid var(--border-color);
+            margin-bottom: 0px;
+            box-shadow: 2px 2px 0px var(--border-color);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: transform 0.1s;
+        }
+
+        .post-item:hover {
+            transform: translate(-1px, -1px);
+            box-shadow: 3px 3px 0px var(--border-color);
+            background: #fffdfd;
+        }
+
+        .post-title {
+            font-size: 1rem;
+            font-weight: bold;
+            color: var(--e-paper-black);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            margin-right: 15px;
+        }
+
+        .post-meta {
+            font-size: 0.75rem;
+            color: #666;
+            display: flex;
+            gap: 12px;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        /* 閱讀內容區 */
+        #main-content {
+            background-color: #ffffff;
+            padding: 25px;
+            border: 1px solid var(--border-color);
+            min-height: 300px;
+            box-shadow: 4px 4px 0px var(--border-color);
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        #main-content img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 15px 0;
+            border: 0px solid var(--border-color);
+        }
+
+        .loading-text {
+            color: #888;
+            font-style: italic;
+        }
+
+        .error-text {
+            color: #b22222;
+            font-weight: bold;
+        }
+
+        footer {
+            margin-top: 40px;
+            font-size: 0.75rem;
+            text-align: center;
+            color: #666;
+        }
+
+        /* 手機響應式支援：螢幕太小時改回上下排版避免擠壓 */
+        @media (max-width: 600px) {
+            .post-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 5px;
+            }
+            .post-meta {
+                width: 100%;
+                justify-content: space-between;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <div id="header-left">
+                <a href="#" id="back-home" class="back-link" style="display:none;" onclick="goHome(event)">← BACK TO LIST</a>
+                <a href="https://origin-logic-team.github.io" id="hub-link" class="back-link">← BACK TO HUB</a>
+            </div>
+            <h1 id="page-title">MINI BLOG</h1>
+        </header>
+
+        <!-- 分類導覽列 -->
+        <div id="category-container" class="category-bar"></div>
+
+        <!-- 內容主體區 -->
+        <main id="main-content" class="loading-text">
+            正在載入文章清單...
+        </main>
+
+        <footer>
+            Origin Logic Team | Mini Blog System
+        </footer>
+    </div>
+
+    <script>
+        let allItems = [];
+
+        function parseCatalog(rawText) {
+            const items = [];
+            const regex = /<item>([\s\S]*?)<\/item>/g;
+            let match;
+            while ((match = regex.exec(rawText)) !== null) {
+                const block = match[1];
+                const id = (block.match(/<id>([\s\S]*?)<\/id>/) || [])[1]?.trim() || '';
+                const title = (block.match(/<title>([\s\S]*?)<\/title>/) || [])[1]?.trim() || '';
+                const date = (block.match(/<date>([\s\S]*?)<\/date>/) || [])[1]?.trim() || '';
+                const category = (block.match(/<category>([\s\S]*?)<\/category>/) || [])[1]?.trim() || 'general';
+                if (id && title) {
+                    items.push({ id, title, date, category });
+                }
+            }
+            return items;
+        }
+
+        function parseArticles(rawText, targetId) {
+            const regex = /<article\s+id="([^"]+)">([\s\S]*?)<\/article>/g;
+            let match;
+            while ((match = regex.exec(rawText)) !== null) {
+                if (match[1] === targetId) {
+                    return match[2].trim();
+                }
+            }
+            return null;
+        }
+
+        function renderCategories(items) {
+            const categories = ['ALL', ...new Set(items.map(i => i.category))];
+            const catContainer = document.getElementById('category-container');
+            catContainer.innerHTML = categories.map(cat => 
+                `<button class="cat-btn ${cat === 'ALL' ? 'active' : ''}" onclick="filterCategory('${cat}', this)">${cat.toUpperCase()}</button>`
+            ).join('');
+        }
+
+        window.filterCategory = function(cat, btn) {
+            document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const filtered = cat === 'ALL' ? allItems : allItems.filter(i => i.category === cat);
+            renderList(filtered);
+        };
+
+        function renderList(items) {
+            const mainContent = document.getElementById('main-content');
+            document.getElementById('page-title').innerText = 'MINI BLOG';
+            document.getElementById('back-home').style.display = 'none';
+            document.getElementById('hub-link').style.display = 'inline';
+            document.getElementById('category-container').style.display = 'flex';
+
+            if (items.length === 0) {
+                mainContent.innerHTML = '<span class="error-text">目前沒有符合的文章。</span>';
+                return;
+            }
+
+            mainContent.className = '';
+            mainContent.innerHTML = items.map(item => `
+                <div class="post-item" onclick="loadArticle('${item.id}')">
+                    <div class="post-title">${item.title}</div>
+                    <div class="post-meta">
+                        <span>📅 ${item.date}</span>
+                        <span>#${item.category}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        window.loadArticle = async function(id) {
+            const mainContent = document.getElementById('main-content');
+            mainContent.className = 'loading-text';
+            mainContent.innerHTML = '正在載入文章內容...';
+
+            try {
+                const response = await fetch('./posts_content.txt');
+                if (!response.ok) throw new Error('無法讀取 posts_content.txt');
+                const rawText = await response.text();
+                const articleHtml = parseArticles(rawText, id);
+
+                if (!articleHtml) throw new Error(`找不到 ID 為 ${id} 的文章內容`);
+
+                const currentItem = allItems.find(i => i.id === id);
+                document.getElementById('page-title').innerText = currentItem ? currentItem.title : 'ARTICLE';
+                document.getElementById('back-home').style.display = 'inline';
+                document.getElementById('hub-link').style.display = 'none';
+                document.getElementById('category-container').style.display = 'none';
+
+                let processed = articleHtml.replace(/\[img:\s*([^\]]+)\]/g, '<img src="$1" alt="image">');
+
+                mainContent.className = '';
+                mainContent.innerHTML = processed;
+                window.location.hash = `id=${id}`;
+            } catch (err) {
+                mainContent.className = '';
+                mainContent.innerHTML = `<span class="error-text">[錯誤] ${err.message}</span>`;
+            }
+        };
+
+        window.goHome = function(e) {
+            e.preventDefault();
+            window.location.hash = '';
+            renderList(allItems);
+        };
+
+        async function initBlog() {
+            try {
+                const res = await fetch('./catalog.txt');
+                if (!res.ok) throw new Error('無法讀取 catalog.txt');
+                const rawText = await res.text();
+                allItems = parseCatalog(rawText);
+
+                renderCategories(allItems);
+
+                const hash = window.location.hash;
+                if (hash.startsWith('#id=')) {
+                    loadArticle(hash.replace('#id=', ''));
+                } else {
+                    renderList(allItems);
+                }
+            } catch (err) {
+                const mainContent = document.getElementById('main-content');
+                mainContent.className = '';
+                mainContent.innerHTML = `<span class="error-text">[系統初始化錯誤] ${err.message}</span><br>請確認 catalog.txt 與 posts_content.txt 是否存在。`;
+            }
+        }
+
+        window.onload = initBlog;
+    </script>
+</body>
+</html>

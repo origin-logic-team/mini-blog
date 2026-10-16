@@ -1,0 +1,9 @@
+<article id="001">
+今天天氣很好，去了公園散步。
+[img: ./images/place_holder.png]
+這是照片下方的文字說明，維持你喜歡的單欄閱讀。
+</article>
+
+<article id="002">
+這是一篇完全沒有圖片的單欄文章。
+</article>
